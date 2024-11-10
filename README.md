@@ -1,5 +1,5 @@
 # Check conditions on you object attribute!
-Well you can easy do it with comparsion, but when you want to have customization for tehse checks,
+Well you can easy do it with comparsion, but when you want to have customization for these checks,
 e.g. you want to save that to a database or file this is what you want!
 
 ## Why should i use this?
