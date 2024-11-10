@@ -1,0 +1,1 @@
+# python_object_condition_checker
