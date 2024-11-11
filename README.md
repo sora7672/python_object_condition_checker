@@ -10,14 +10,15 @@ Take the object_condition_checker.py and place it inside your project.
 Import the `ConditionList` and place it as attribute in one of your classes.
 Then create a methode on that object like this:
 ```python
-def __init(self):
-  # your stuff
-  self.condtion_list: ConditionList = ConditionList()
-
-
-def check_conditions(self):
-  if self.condition_list.is_true():
-    # do your stuff
+class MyTest:
+  def __init(self):
+    # your attributes
+    self.condtion_list: ConditionList = ConditionList(...)  # Obviously need to create here some conditions
+  
+  
+  def check_conditions(self):
+    if self.condition_list.is_true():
+      # do your stuff
 
 ```
 
