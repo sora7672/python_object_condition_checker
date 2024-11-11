@@ -1,6 +1,53 @@
-from datetime import datetime, date, time
+"""
+Condition Evaluation Module
+===========================
+
+Description:
+    This module provides tools for creating, evaluating, and serializing conditional logic on object attributes.
+    It includes classes to define individual attribute conditions, combine them with logical operators,
+    and evaluate them against specified objects.
+
+Contents:
+    Classes:
+        - ObjectCondition: Represents a condition for evaluating an object's attribute based on
+          a comparison operator and value. Supports various data types, including numbers, strings, dates,
+          and more.
+        - ConditionList: Represents a collection of ObjectCondition or ConditionList instances that are
+          evaluated together using a specified logical operator (AND/OR).
+
+    Functions:
+        - is_debug(): Utility function to toggle debugging output.
+
+Usage:
+    Example usage:
+    
+        condition = ObjectCondition("age", ">=", 18, "int")
+        another_condition = ObjectCondition("status", "==", "active", "str")
+        condition_list = ConditionList(condition, another_condition, operator="and")
+        
+        obj = YourClass(age=20, status="active")
+        result = condition_list.is_true(obj)
+        
+    This example checks if the object `obj` has an `age` of at least 18 and a `status` of "active".
+
+Dependencies:
+    Requires Python standard library modules `datetime` and `json`
+
+Author:
+    Sora_7672 - https://github.com/sora7672
+
+License:
+    MIT License
+"""
+
+
+
+from datetime import datetime, date, time, timedelta
 import json
 
+def is_debug():
+    tmp = False
+    return tmp
 
 class ObjectCondition:
     """
@@ -83,32 +130,44 @@ class ObjectCondition:
         :param obj: The object containing the attribute to be checked.
         :return: Boolean indicating if the condition holds true for the given object.
         """
+        # TODO: if the type of attribute_value is date, time, datetime we need to convert the
+
         if not hasattr(obj, self._attribute_name):
             raise AttributeError(f"Condition evaluation error.\nObject ({obj}) has no attribute {self._attribute_name}")
 
         test_value = getattr(obj, self._attribute_name)
-        if not isinstance(test_value, type(self._attribute_value)):
+
+        if self._value_type == "str":
+            if not isinstance(test_value, (str, tuple, list, set, frozenset)):
+                raise TypeError(f"Condition evaluation error.\nObject ({obj}) attribute type {type(test_value)} "
+                                f"is not type (str, tuple, list, set, frozenset)")
+        elif self._value_type in ("date", "time", "datetime"):
+            test_value = self.convert_to_type(test_value)
+
+        elif not isinstance(test_value, type(self._attribute_value)):
             raise TypeError(f"Condition evaluation error.\nObject ({obj}) attribute type {type(test_value)} "
                             f"is not type {type(self._attribute_value)}")
 
+        if is_debug():
+            print(f"{self._attribute_value} {self._comp_operator} {test_value}")
         match self._comp_operator:
             case "in":
-                return test_value in self._accepted_comp_operators_lists
+                return self._attribute_value in test_value
 
             case "not in":
-                return test_value not in self._accepted_comp_operators_lists
+                return self._attribute_value not in test_value
 
             case "<":
-                return test_value < self._attribute_value
+                return self._attribute_value < test_value
 
             case ">":
-                return test_value > self._attribute_value
+                return self._attribute_value > test_value
 
             case "<=":
-                return test_value <= self._attribute_value
+                return self._attribute_value <= test_value
 
             case ">=":
-                return test_value >= self._attribute_value
+                return self._attribute_value >= test_value
 
             case "==":
                 return test_value == self._attribute_value
@@ -119,7 +178,7 @@ class ObjectCondition:
             case _:
                 raise Exception(f"Unknown comparison operator {self._comp_operator}")
 
-    def dict(self) -> dict:
+    def to_dict(self) -> dict:
         """
         Serializes the condition to a dictionary.
 
@@ -139,10 +198,10 @@ class ObjectCondition:
 
         :return: JSON string representation of the condition.
         """
-        return json.dumps(self.dict())
+        return json.dumps(self.to_dict())
 
     @classmethod
-    def from_json(cls, data: str| dict) -> 'ObjectCondition':
+    def from_json(cls, data: str | dict) -> 'ObjectCondition':
         """
         Creates an ObjectCondition instance from a JSON string or dictionary.
 
@@ -161,6 +220,43 @@ class ObjectCondition:
             value_type=data["value_type"]
         )
 
+    def convert_to_type(self, input_value):
+        # Ensure output_type is valid
+
+
+        # Convert input_value to a datetime object first
+        if isinstance(input_value, datetime):
+            # Already a datetime, so no conversion needed
+            dt_value = input_value
+        elif isinstance(input_value, date):
+            # Convert date to datetime at midnight
+            dt_value = datetime.combine(input_value, time(0, 0))
+        elif isinstance(input_value, time):
+            # Convert time to datetime on today's date
+            dt_value = datetime.combine(date.today(), input_value)
+        elif isinstance(input_value, (int, float)):
+            # Treat as Unix timestamp
+            dt_value = datetime.fromtimestamp(input_value)
+        elif isinstance(input_value, str):
+            # Try to parse string as ISO format datetime or date
+            try:
+                dt_value = datetime.fromisoformat(input_value)
+            except ValueError:
+                try:
+                    # If input is date-only format
+                    dt_value = datetime.combine(date.fromisoformat(input_value), time(0, 0))
+                except ValueError:
+                    raise ValueError("String format not recognized as ISO date or datetime.")
+        else:
+            raise TypeError("Unsupported input type. Must be date, time, datetime, float, or string.")
+
+        # Convert dt_value to the requested output type
+        if self._value_type == "date":
+            return dt_value.date()
+        elif self._value_type == "time":
+            return dt_value.time()
+        elif self._value_type == "datetime":
+            return dt_value
     @staticmethod
     def parse_datetime(value: str) -> datetime:
         """
@@ -193,7 +289,7 @@ class ConditionList:
     """
     _accepted_boolean_operators = ("and", "or")
 
-    def __init__(self, *conditions: ObjectCondition | 'ConditionList', operator: str = "and"):
+    def __init__(self, *conditions , operator: str = "and"):
         """
         Initializes a ConditionList with specified conditions and logical operator.
 
@@ -223,7 +319,10 @@ class ConditionList:
             result = condition.is_true(obj)
             result_list.append(result)
 
-        final_result = result_list[0][0]
+        if is_debug():
+            print(f"operator {self.operator}: {result_list}")
+
+        final_result = result_list[0]
         for result in result_list[1:]:
             if self.operator == "and":
                 final_result = final_result and result
@@ -234,7 +333,7 @@ class ConditionList:
 
         return final_result
 
-    def dict(self) -> dict:
+    def to_dict(self) -> dict:
         """
         Serializes the ConditionList to a dictionary.
 
@@ -242,7 +341,7 @@ class ConditionList:
         """
         return {
             "operator": self.operator,
-            "conditions": [condition.dict() for condition in self.conditions]
+            "conditions": [condition.to_dict() for condition in self.conditions]
         }
 
     def json(self) -> str:
@@ -251,7 +350,7 @@ class ConditionList:
 
         :return: JSON string representing the ConditionList.
         """
-        return json.dumps(self.dict())
+        return json.dumps(self.to_dict())
 
     @classmethod
     def from_json(cls, data: str | dict) -> 'ConditionList':
@@ -279,3 +378,6 @@ class ConditionList:
         conditions_str = f" {self.operator.upper()} ".join(str(cond) for cond in self.conditions)
         return f"ConditionList({conditions_str})"
 
+
+if __name__ == "__main__":
+    print("Please start with another module.")
