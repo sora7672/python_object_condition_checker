@@ -1,9 +1,11 @@
-# Check conditions on you object attribute!
+# Check conditions on your object attributes!
 Well you can easy do it with comparsion, but when you want to have customization for these checks,
 e.g. you want to save that to a database or file this is what you want!
 
 ## Why should i use this?
 Its simple, lightweight and makes it easy to save your condition/conditionlist as json or dict.
+For further usage in database or files.
+This enables you to save on changes or program close and read them in on program start.
 
 ## How to setup
 Take the object_condition_checker.py and place it inside your project.
