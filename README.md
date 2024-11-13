@@ -27,6 +27,25 @@ class MyTest:
 To grab the json of a conditionlist/condition use:
 `self.condition_list.json()`
 
+If you want to check protected or private attributes, make sure to create a property named as the check you want to run.
+Like this:
+```py
+class MyClass:
+  def __init__(self):
+    self._my_protected = 1234
+    self.__my_private = "Bananas"
+
+  @property
+  def my_protected(self):
+    return self._my_protected
+
+  @porperty
+  def my_private(self):
+    return self.__my_private
+
+
+```
+
 Do with it what you can imagine ;)
 I used it for user created conditions, which i save to the database and load on programstart.
 Based on that i labeled some data for analysis.
