@@ -40,14 +40,10 @@ License:
     MIT License
 """
 
-
-
 from datetime import datetime, date, time, timedelta
 import json
 
-def is_debug():
-    tmp = False
-    return tmp
+from threading import Lock
 
 class ObjectCondition:
     """
@@ -66,6 +62,7 @@ class ObjectCondition:
     _accepted_comp_operators = tuple(set(_accepted_comp_operators_strings +
                                          _accepted_comp_operators_numbers +
                                          _accepted_comp_operators_lists))
+    # TODO: add weekdays, monthes to compare & also allowe == and != for these
     _accepted_value_types = ("str", "int", "float", "date", "datetime", "time")
 
     def __init__(self, attribute_name: str, comp_operator: str,
@@ -84,8 +81,9 @@ class ObjectCondition:
         if comp_operator not in self._accepted_comp_operators:
             raise ValueError("Comp operators not supported")
 
-        self._attribute_name: str = attribute_name
+        self._value_type = value_type
         self._comp_operator: str = comp_operator
+        self._attribute_name: str = attribute_name
 
         match value_type:
             case "str":
@@ -121,7 +119,23 @@ class ObjectCondition:
             case _:
                 raise ValueError(f"Invalid value type {value_type}")
 
-        self._value_type = value_type
+
+        self.lock = Lock()
+
+    @property
+    def attribute_name(self) -> str:
+        with self.lock:
+            return self._attribute_name
+
+    @property
+    def comp_operator(self) -> str:
+        with self.lock:
+            return self._comp_operator
+
+    @property
+    def attribute_value(self) -> str:
+        with self.lock:
+            return str(self._attribute_value)
 
     def is_true(self, obj: object) -> bool:
         """
@@ -130,7 +144,6 @@ class ObjectCondition:
         :param obj: The object containing the attribute to be checked.
         :return: Boolean indicating if the condition holds true for the given object.
         """
-        # TODO: if the type of attribute_value is date, time, datetime we need to convert the
 
         if not hasattr(obj, self._attribute_name):
             raise AttributeError(f"Condition evaluation error.\nObject ({obj}) has no attribute {self._attribute_name}")
@@ -148,14 +161,21 @@ class ObjectCondition:
             raise TypeError(f"Condition evaluation error.\nObject ({obj}) attribute type {type(test_value)} "
                             f"is not type {type(self._attribute_value)}")
 
-        if is_debug():
-            print(f"{self._attribute_value} {self._comp_operator} {test_value}")
+
+
         match self._comp_operator:
+            # FIXME: seems to not working properly anyhow?
             case "in":
-                return self._attribute_value in test_value
+                if isinstance(test_value, str):
+                    return self._attribute_value.lower() in test_value.lower()
+                else:
+                    return self._attribute_value.lower() in [item.lower() for item in test_value]
 
             case "not in":
-                return self._attribute_value not in test_value
+                if isinstance(test_value, str):
+                    return self._attribute_value.lower() not in test_value.lower()
+                else:
+                    return self._attribute_value.lower() not in [item.lower() for item in test_value]
 
             case "<":
                 return self._attribute_value < test_value
@@ -170,10 +190,16 @@ class ObjectCondition:
                 return self._attribute_value >= test_value
 
             case "==":
-                return test_value == self._attribute_value
+                if isinstance(test_value, str):
+                    return test_value.lower() == self._attribute_value.lower()
+                else:
+                    return test_value == self._attribute_value
 
             case "!=":
-                return test_value != self._attribute_value
+                if isinstance(test_value, str):
+                    return test_value.lower() != self._attribute_value.lower()
+                else:
+                    return test_value != self._attribute_value
 
             case _:
                 raise Exception(f"Unknown comparison operator {self._comp_operator}")
@@ -184,13 +210,14 @@ class ObjectCondition:
 
         :return: A dictionary with the condition's parameters.
         """
-        data = {
-            "attribute_name": self._attribute_name,
-            "comp_operator": self._comp_operator,
-            "attribute_value": str(self._attribute_value),
-            "value_type": self._value_type
-        }
-        return data
+        with self.lock:
+            return {
+                "attribute_name": self._attribute_name,
+                "comp_operator": self._comp_operator,
+                "attribute_value": str(self._attribute_value),
+                "value_type": self._value_type
+            }
+
 
     def json(self) -> str:
         """
@@ -200,30 +227,8 @@ class ObjectCondition:
         """
         return json.dumps(self.to_dict())
 
-    @classmethod
-    def from_json(cls, data: str | dict) -> 'ObjectCondition':
-        """
-        Creates an ObjectCondition instance from a JSON string or dictionary.
-
-        :param data: A JSON string or dictionary with condition parameters.
-        :return: ObjectCondition instance initialized with the given data.
-        """
-        if isinstance(data, str):
-            data = json.loads(data)
-        elif not isinstance(data, dict):
-            raise ValueError("Input must be a JSON string or a dictionary.")
-
-        return cls(
-            attribute_name=data["attribute_name"],
-            comp_operator=data["comp_operator"],
-            attribute_value=data["attribute_value"],
-            value_type=data["value_type"]
-        )
-
     def convert_to_type(self, input_value):
         # Ensure output_type is valid
-
-
         # Convert input_value to a datetime object first
         if isinstance(input_value, datetime):
             # Already a datetime, so no conversion needed
@@ -257,6 +262,35 @@ class ObjectCondition:
             return dt_value.time()
         elif self._value_type == "datetime":
             return dt_value
+
+    @classmethod
+    def from_json(cls, data: str | dict) -> 'ObjectCondition':
+        """
+        Creates an ObjectCondition instance from a JSON string or dictionary.
+
+        :param data: A JSON string or dictionary with condition parameters.
+        :return: ObjectCondition instance initialized with the given data.
+        """
+        if isinstance(data, str):
+            data = json.loads(data)
+        elif not isinstance(data, dict):
+            raise ValueError("Input must be a JSON string or a dictionary.")
+
+        return cls(
+            attribute_name=data["attribute_name"],
+            comp_operator=data["comp_operator"],
+            attribute_value=data["attribute_value"],
+            value_type=data["value_type"]
+        )
+
+    @classmethod
+    def get_operators_for_string(cls):
+        return cls._accepted_comp_operators_strings
+
+    @classmethod
+    def get_operators_for_number(cls):
+        return cls._accepted_comp_operators_numbers
+
     @staticmethod
     def parse_datetime(value: str) -> datetime:
         """
@@ -289,7 +323,7 @@ class ConditionList:
     """
     _accepted_boolean_operators = ("and", "or")
 
-    def __init__(self, *conditions , operator: str = "and"):
+    def __init__(self, *conditions, operator: str = "and"):
         """
         Initializes a ConditionList with specified conditions and logical operator.
 
@@ -297,7 +331,8 @@ class ConditionList:
         :param operator: Logical operator to apply across conditions, either 'and' or 'or'.
         """
         self.conditions = []
-        if operator not in self._accepted_boolean_operators:
+        self.lock = Lock()
+        if operator.lower() not in self._accepted_boolean_operators:
             raise ValueError("Operator not supported")
         self.operator = operator.lower()
 
@@ -306,6 +341,14 @@ class ConditionList:
                 self.conditions.append(condition)
             else:
                 raise ValueError(f"Invalid condition type {type(condition)}")
+
+    def add(self, *conditions, operator: str = "and"):
+        with self.lock:
+            for condition in conditions:
+                if isinstance(condition, ObjectCondition) or isinstance(condition, ConditionList):
+                    self.conditions.append(condition)
+                else:
+                    raise ValueError(f"Invalid condition type {type(condition)}")
 
     def is_true(self, obj: object) -> bool:
         """
@@ -319,8 +362,6 @@ class ConditionList:
             result = condition.is_true(obj)
             result_list.append(result)
 
-        if is_debug():
-            print(f"operator {self.operator}: {result_list}")
 
         final_result = result_list[0]
         for result in result_list[1:]:
@@ -377,6 +418,7 @@ class ConditionList:
     def __str__(self) -> str:
         conditions_str = f" {self.operator.upper()} ".join(str(cond) for cond in self.conditions)
         return f"ConditionList({conditions_str})"
+
 
 
 if __name__ == "__main__":
