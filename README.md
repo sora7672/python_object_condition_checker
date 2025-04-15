@@ -13,7 +13,7 @@ Import the `ConditionList` and place it as attribute in one of your classes.
 Then create a methode on that object like this:
 ```python
 class MyTest:
-  def __init(self):
+  def __init__(self):
     # your attributes
     self.condtion_list: ConditionList = ConditionList(...)  # Obviously need to create here some conditions
   
@@ -39,7 +39,7 @@ class MyClass:
   def my_protected(self):
     return self._my_protected
 
-  @porperty
+  @property
   def my_private(self):
     return self.__my_private
 
